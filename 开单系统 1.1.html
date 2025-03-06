@@ -1,0 +1,749 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>智能销售管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --text-color: #333;
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --success: #27ae60;
+            --warning: #f1c40f;
+            --danger: #e74c3c;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", SimSun, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .nav {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: var(--secondary);
+            color: white;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .section {
+            display: none;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+
+        .active { display: block; }
+
+        .form-group {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        input, select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            min-width: 200px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .print-area {
+            padding: 20px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin: 20px 0;
+            width: 600px; /* 固定宽度 */
+            height: 400px; /* 固定高度 */
+            overflow-y: auto; /* 溢出时显示滚动条 */
+        }
+
+        .payment-methods {
+            display: flex;
+            gap: 15px;
+            margin: 10px 0;
+        }
+
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航菜单 -->
+    <div class="nav">
+        <button class="active" onclick="showSection('main')">主界面</button>
+        <button onclick="showSection('sales')">销售开单</button>
+        <button onclick="showSection('returns')">退货开单</button>
+        <button onclick="showSection('settlements')">结账单</button>
+        <button onclick="showSection('products')">商品管理</button>
+        <button onclick="showSection('customers')">客户管理</button>
+        <button onclick="exportData()">数据导出</button>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="main" class="section active">
+        <h2>系统概览</h2>
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>实时统计</h3>
+                <p>商品总数：<span id="totalProducts">0</span></p>
+                <p>客户总数：<span id="totalCustomers">0</span></p>
+                <p>本月销售额：¥<span id="monthSales">0.00</span></p>
+                <p>本年销售额：¥<span id="yearSales">0.00</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 销售开单 -->
+    <div id="sales" class="section">
+        <h2>销售开单</h2>
+        <div class="form-group">
+            <select id="customerSelect" onchange="showCustomerBalance()">
+                <option value="">选择客户（可选）</option>
+            </select>
+            <select id="productSelect">
+                <option value="">选择商品</option>
+            </select>
+            <input type="number" id="saleQty" min="1" value="1" placeholder="数量">
+            <button onclick="addToCart()">添加商品</button>
+        </div>
+
+        <div class="form-group">
+            <label for="saleDateInput">开单日期：</label>
+            <input type="date" id="saleDateInput" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+
+        <div class="payment-methods">
+            <label><input type="radio" name="paymentType" value="cash"> 现金支付</label>
+            <label><input type="radio" name="paymentType" value="credit" checked> 挂账支付</label>
+        </div>
+
+        <div class="print-area">
+            <h3>销售单据</h3>
+            <p>日期：<span id="saleDate"></span></p>
+            <p>客户：<span id="saleCustomer">无</span></p>
+            <p>支付方式：<span id="salePaymentType">挂账</span></p>
+            <p>累计结欠：¥<span id="saleCustomerBalance">0.00</span></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>商品名称</th>
+                        <th>单价</th>
+                        <th>数量</th>
+                        <th>小计</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="saleItems"></tbody>
+            </table>
+            <p>总金额：¥<span id="saleTotal">0.00</span></p>
+        </div>
+
+        <div class="form-group">
+            <button onclick="submitSale()">提交订单</button>
+            <button onclick="printSale()">打印单据</button>
+        </div>
+    </div>
+
+    <!-- 退货开单 -->
+    <div id="returns" class="section">
+        <h2>退货开单</h2>
+        <div class="form-group">
+            <select id="returnCustomer" onchange="showReturnCustomerBalance()">
+                <option value="">选择客户（可选）</option>
+            </select>
+            <select id="returnProductSelect">
+                <option value="">选择商品</option>
+            </select>
+            <input type="number" id="returnQty" min="1" value="1" placeholder="数量">
+            <button onclick="addReturnItem()">添加退货</button>
+        </div>
+
+        <div class="payment-methods">
+            <label><input type="radio" name="refundType" value="cash" checked> 现金退款</label>
+            <label><input type="radio" name="refundType" value="credit"> 冲抵结欠</label>
+        </div>
+
+        <div class="print-area">
+            <h3>退货单据</h3>
+            <p>日期：<span id="returnDate"></span></p>
+            <p>客户：<span id="returnCustomerName">无</span></p>
+            <p>退款方式：<span id="returnPaymentType">现金</span></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>商品名称</th>
+                        <th>单价</th>
+                        <th>数量</th>
+                        <th>小计</th>
+                    </tr>
+                </thead>
+                <tbody id="returnItems"></tbody>
+            </table>
+            <p>总退款：¥<span id="returnTotal">0.00</span></p>
+        </div>
+
+        <div class="form-group">
+            <button onclick="submitReturn()">提交退货</button>
+            <button onclick="printReturn()">打印单据</button>
+        </div>
+    </div>
+
+    <!-- 结账单 -->
+    <div id="settlements" class="section">
+        <h2>结账单管理</h2>
+        <div class="form-group">
+            <select id="settleCustomer" onchange="showSettlementInfo()">
+                <option value="">选择客户</option>
+            </select>
+            <input type="number" id="settleAmount" placeholder="结算金额">
+        </div>
+
+        <div class="payment-methods">
+            <label><input type="radio" name="settleType" value="cash" checked> 现金</label>
+            <label><input type="radio" name="settleType" value="transfer"> 转账</label>
+        </div>
+
+        <div class="print-area">
+            <h3>结算单据</h3>
+            <p>客户：<span id="settleCustomerName"></span></p>
+            <p>原结欠：¥<span id="originalBalance">0.00</span></p>
+            <p>本次结算：¥<span id="settleAmountShow">0.00</span></p>
+            <p>剩余结欠：¥<span id="newBalance">0.00</span></p>
+        </div>
+
+        <div class="form-group">
+            <button onclick="processSettlement()">确认结算</button>
+            <button onclick="printSettlement()">打印单据</button>
+        </div>
+    </div>
+
+    <!-- 商品管理 -->
+    <div id="products" class="section">
+        <h2>商品管理</h2>
+        <div class="form-group">
+            <input type="text" id="productName" placeholder="商品名称">
+            <input type="number" id="productPrice" step="0.01" placeholder="单价">
+            <input type="number" id="productStock" placeholder="库存">
+            <button onclick="addProduct()">添加商品</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>商品名称</th>
+                    <th>单价</th>
+                    <th>库存</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="productList"></tbody>
+        </table>
+    </div>
+
+    <!-- 客户管理 -->
+    <div id="customers" class="section">
+        <h2>客户管理</h2>
+        <div class="form-group">
+            <input type="text" id="customerName" placeholder="客户名称">
+            <input type="number" id="creditLimit" placeholder="信用额度">
+            <button onclick="addCustomer()">添加客户</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>客户名称</th>
+                    <th>当前结欠</th>
+                    <th>信用额度</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="customerList"></tbody>
+        </table>
+    </div>
+
+<script>
+// 增强数据库结构
+let db = {
+    products: JSON.parse(localStorage.getItem('products')) || [],
+    customers: JSON.parse(localStorage.getItem('customers')) || [],
+    orders: JSON.parse(localStorage.getItem('orders')) || [],
+    settlements: JSON.parse(localStorage.getItem('settlements')) || []
+};
+
+let saleCart = [];
+let returnCart = [];
+let currentCustomerBalance = 0;
+
+// 初始化
+function init() {
+    refreshProducts();
+    refreshCustomers();
+    refreshSelects();
+    updateMainStats();
+    document.getElementById('saleDate').textContent = new Date().toISOString().split('T')[0];
+    document.getElementById('returnDate').textContent = new Date().toISOString().split('T')[0];
+    setInterval(updateMainStats, 5000);
+}
+
+// 增强保存功能
+function saveData() {
+    localStorage.setItem('products', JSON.stringify(db.products));
+    localStorage.setItem('customers', JSON.stringify(db.customers));
+    localStorage.setItem('orders', JSON.stringify(db.orders));
+    localStorage.setItem('settlements', JSON.stringify(db.settlements));
+    refreshAll();
+}
+
+// 数据导出
+function exportData() {
+    const dataStr = JSON.stringify(db);
+    const blob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sales_system_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+}
+
+// 界面切换
+function showSection(sectionId) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById(sectionId).classList.add('active');
+    refreshAll();
+}
+
+// 通用刷新
+function refreshAll() {
+    refreshProducts();
+    refreshCustomers();
+    updateMainStats();
+}
+
+// 商品管理
+function refreshProducts() {
+    const productSelects = document.querySelectorAll('#productSelect, #returnProductSelect');
+    productSelects.forEach(select => {
+        select.innerHTML = '<option value="">选择商品</option>';
+        db.products.forEach(product => {
+            select.innerHTML += `<option value="${product.id}">${product.name}</option>`;
+        });
+    });
+
+    const productList = document.getElementById('productList');
+    productList.innerHTML = db.products.map(product => `
+        <tr>
+            <td>${product.name}</td>
+            <td>¥${product.price.toFixed(2)}</td>
+            <td>${product.stock}</td>
+            <td>
+                <button class="edit-btn" onclick="editProduct(${product.id})">编辑</button>
+                <button class="delete-btn" onclick="deleteProduct(${product.id})">删除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function addProduct() {
+    const name = document.getElementById('productName').value.trim();
+    const price = parseFloat(document.getElementById('productPrice').value);
+    const stock = parseInt(document.getElementById('productStock').value);
+
+    if (!name || price <= 0 || stock < 0 || isNaN(price) || isNaN(stock)) {
+        alert('请填写有效的商品信息（名称、正数价格、非负库存）');
+        return;
+    }
+
+    db.products.push({
+        id: Date.now(),
+        name,
+        price,
+        stock
+    });
+    saveData();
+}
+
+function deleteProduct(id) {
+    if (!confirm('确定删除该商品？')) return;
+    db.products = db.products.filter(p => p.id !== id);
+    saveData();
+}
+
+// 客户管理
+function refreshCustomers() {
+    const customerSelects = document.querySelectorAll('#customerSelect, #returnCustomer, #settleCustomer');
+    customerSelects.forEach(select => {
+        select.innerHTML = '<option value="">选择客户</option>';
+        db.customers.forEach(customer => {
+            select.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
+        });
+    });
+
+    const customerList = document.getElementById('customerList');
+    customerList.innerHTML = db.customers.map(customer => `
+        <tr>
+            <td>${customer.name}</td>
+            <td>¥${customer.balance?.toFixed(2) || '0.00'}</td>
+            <td>¥${customer.creditLimit?.toFixed(2) || '0.00'}</td>
+            <td>
+                <button class="edit-btn" onclick="editCustomer(${customer.id})">编辑</button>
+                <button class="delete-btn" onclick="deleteCustomer(${customer.id})">删除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function addCustomer() {
+    const name = document.getElementById('customerName').value.trim();
+    const creditLimit = parseFloat(document.getElementById('creditLimit').value);
+
+    if (!name || isNaN(creditLimit) || creditLimit < 0) {
+        alert('请填写有效的客户信息（名称、非负信用额度）');
+        return;
+    }
+
+    db.customers.push({
+        id: Date.now(),
+        name,
+        creditLimit,
+        balance: 0
+    });
+    saveData();
+}
+
+function deleteCustomer(id) {
+    if (!confirm('确定删除该客户？')) return;
+    db.customers = db.customers.filter(c => c.id !== id);
+    saveData();
+}
+
+// 销售功能
+function addToCart() {
+    const productId = document.getElementById('productSelect').value;
+    const qty = parseInt(document.getElementById('saleQty').value);
+    const product = db.products.find(p => p.id == productId);
+
+    if (!product || qty < 1 || qty > product.stock) {
+        alert('库存不足或无效数量');
+        return;
+    }
+
+    const existingItem = saleCart.find(item => item.id == productId);
+    if (existingItem) {
+        existingItem.qty += qty;
+        existingItem.subtotal = existingItem.price * existingItem.qty;
+    } else {
+        saleCart.push({
+            ...product,
+            qty,
+            subtotal: product.price * qty
+        });
+    }
+    refreshSaleCart();
+}
+
+function refreshSaleCart() {
+    const itemsBody = document.getElementById('saleItems');
+    itemsBody.innerHTML = saleCart.map((item, index) => `
+        <tr>
+            <td>${item.name}</td>
+            <td>¥${item.price.toFixed(2)}</td>
+            <td>
+                <input type="number" value="${item.qty}" min="1" onchange="updateSaleItemQty(${index}, this.value)">
+            </td>
+            <td>¥${item.subtotal.toFixed(2)}</td>
+            <td>
+                <button onclick="deleteSaleItem(${index})">删除</button>
+            </td>
+        </tr>
+    `).join('');
+    document.getElementById('saleTotal').textContent = saleCart.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2);
+}
+
+function updateSaleItemQty(index, newQty) {
+    newQty = parseInt(newQty);
+    const item = saleCart[index];
+    const product = db.products.find(p => p.id == item.id);
+    if (newQty < 1 || newQty > product.stock) {
+        alert('库存不足或无效数量');
+        return;
+    }
+    item.qty = newQty;
+    item.subtotal = item.price * newQty;
+    refreshSaleCart();
+}
+
+function deleteSaleItem(index) {
+    saleCart.splice(index, 1);
+    refreshSaleCart();
+}
+
+function submitSale() {
+    const customerId = document.getElementById('customerSelect').value;
+    const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
+    const total = saleCart.reduce((sum, item) => sum + item.subtotal, 0);
+    const customer = db.customers.find(c => c.id == customerId);
+    const saleDate = document.getElementById('saleDateInput').value;
+
+    if (paymentType === 'credit' && !customer) {
+        alert('挂账支付需要选择有效客户');
+        return;
+    }
+
+    if (customer && paymentType === 'credit' && customer.creditLimit < (customer.balance + total)) {
+        alert('客户信用额度不足');
+        return;
+    }
+
+    saleCart.forEach(item => {
+        db.products.find(p => p.id == item.id).stock -= item.qty;
+    });
+
+    if (paymentType === 'credit' && customer) {
+        customer.balance += total;
+    }
+
+    db.orders.push({
+        id: Date.now(),
+        type: 'sale',
+        customerId: customerId || null,
+        items: saleCart,
+        total,
+        paymentType,
+        date: saleDate
+    });
+
+    saleCart = [];
+    saveData();
+    alert('销售订单提交成功！');
+}
+
+// 显示客户结欠
+function showCustomerBalance() {
+    const customerId = document.getElementById('customerSelect').value;
+    const customer = db.customers.find(c => c.id == customerId);
+    if (customer) {
+        document.getElementById('saleCustomer').textContent = customer.name;
+        document.getElementById('saleCustomerBalance').textContent = customer.balance.toFixed(2);
+    } else {
+        document.getElementById('saleCustomer').textContent = '无';
+        document.getElementById('saleCustomerBalance').textContent = '0.00';
+    }
+}
+
+// 退货功能
+function addReturnItem() {
+    const productId = document.getElementById('returnProductSelect').value;
+    const qty = parseInt(document.getElementById('returnQty').value);
+    const product = db.products.find(p => p.id == productId);
+
+    if (!product || qty < 1) {
+        alert('请选择有效商品和数量');
+        return;
+    }
+
+    const existingOrder = db.orders.find(o => 
+        o.type === 'sale' && 
+        o.items.some(i => i.id == productId)
+    );
+
+    if (!existingOrder) {
+        alert('该商品没有销售记录，无法退货');
+        return;
+    }
+
+    returnCart.push({
+        ...product,
+        qty,
+        subtotal: product.price * qty
+    });
+    refreshReturnCart();
+}
+
+function refreshReturnCart() {
+    const itemsBody = document.getElementById('returnItems');
+    itemsBody.innerHTML = returnCart.map(item => `
+        <tr>
+            <td>${item.name}</td>
+            <td>¥${item.price.toFixed(2)}</td>
+            <td>${item.qty}</td>
+            <td>¥${item.subtotal.toFixed(2)}</td>
+        </tr>
+    `).join('');
+    document.getElementById('returnTotal').textContent = returnCart.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2);
+}
+
+function submitReturn() {
+    const customerId = document.getElementById('returnCustomer').value;
+    const refundType = document.querySelector('input[name="refundType"]:checked').value;
+    const total = returnCart.reduce((sum, item) => sum + item.subtotal, 0);
+    const customer = db.customers.find(c => c.id == customerId);
+
+    if (refundType === 'credit' && !customer) {
+        alert('挂账退货需要选择有效客户');
+        return;
+    }
+
+    returnCart.forEach(item => {
+        const product = db.products.find(p => p.id == item.id);
+        product.stock += item.qty;
+        
+        if (refundType === 'credit' && customer) {
+            customer.balance = Math.max(0, customer.balance - item.subtotal);
+        }
+    });
+
+    db.orders.push({
+        id: Date.now(),
+        type: 'return',
+        customerId: customerId || null,
+        items: returnCart,
+        total,
+        refundType,
+        date: new Date().toISOString()
+    });
+
+    returnCart = [];
+    saveData();
+    alert('退货处理成功！');
+}
+
+// 结算功能
+function processSettlement() {
+    const customerId = document.getElementById('settleCustomer').value;
+    const amount = parseFloat(document.getElementById('settleAmount').value);
+    const settleType = document.querySelector('input[name="settleType"]:checked').value;
+    const customer = db.customers.find(c => c.id == customerId);
+
+    if (!customer || amount <= 0) {
+        alert('请选择有效客户并输入正确金额');
+        return;
+    }
+
+    if (amount > customer.balance) {
+        alert('结算金额不能超过当前结欠');
+        return;
+    }
+
+    const originalBalance = customer.balance;
+    customer.balance -= amount;
+
+    db.settlements.push({
+        id: Date.now(),
+        customerId,
+        amount,
+        settleType,
+        originalBalance,
+        newBalance: customer.balance,
+        date: new Date().toISOString()
+    });
+
+    saveData();
+    alert('结算成功！');
+}
+
+// 统计功能
+function updateMainStats() {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    
+    const monthlySales = db.orders
+        .filter(o => o.type === 'sale' && new Date(o.date).getMonth() + 1 === month)
+        .reduce((sum, o) => sum + o.total, 0);
+    
+    const yearlySales = db.orders
+        .filter(o => o.type === 'sale' && new Date(o.date).getFullYear() === year)
+        .reduce((sum, o) => sum + o.total, 0);
+
+    document.getElementById('monthSales').textContent = monthlySales.toFixed(2);
+    document.getElementById('yearSales').textContent = yearlySales.toFixed(2);
+    document.getElementById('totalProducts').textContent = db.products.length;
+    document.getElementById('totalCustomers').textContent = db.customers.length;
+}
+
+// 打印功能
+async function printSale() {
+    const printContent = document.querySelector('#sales .print-area');
+    const canvas = await html2canvas(printContent);
+    const win = window.open('');
+    win.document.write('<img src="' + canvas.toDataURL() + '"/>');
+    win.print();
+}
+
+async function printReturn() {
+    const printContent = document.querySelector('#returns .print-area');
+    const canvas = await html2canvas(printContent);
+    const win = window.open('');
+    win.document.write('<img src="' + canvas.toDataURL() + '"/>');
+    win.print();
+}
+
+async function printSettlement() {
+    const printContent = document.querySelector('#settlements .print-area');
+    const canvas = await html2canvas(printContent);
+    const win = window.open('');
+    win.document.write('<img src="' + canvas.toDataURL() + '"/>');
+    win.print();
+}
+
+// 初始化执行
+window.onload = init;
+</script>
+</body>
+</html>
